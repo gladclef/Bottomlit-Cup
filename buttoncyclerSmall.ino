@@ -68,14 +68,14 @@ typedef enum {
 //   NEO_KHZ800  800 KHz bitstream (e.g. High Density LED strip), correct for neopixel stick
 Adafruit_NeoPixel strip = NULL;
 
+uint32_t rainDrops[PIXEL_COUNT];
+uint32_t rand_next = 3179389096;
 uint16_t idx = 0;
-uint16_t rainDrops[PIXEL_COUNT];
-uint16_t rand_next = 1;
 uint16_t currTime, btnHighTime = 0;
 #ifdef ARDUINO_UNO
 uint8_t brightness = 150;
 #endif
-SHOW_TYPE showType = RAINBOW_CYCLE;
+SHOW_TYPE showType = FIRE;
 bool oldState = LOW;
 
 void setup() {
@@ -219,105 +219,142 @@ uint16_t rainbowCycle()
 
 uint16_t betterTheaterChase()
 {
-  int count = 2; // TODO what is this value?
-  int pnt = idx % (strip.numPixels() * 2);
-  float space = (float)strip.numPixels() / count;
+  uint8_t pos = clkDivide(idx, 3) % (TWO_PIXEL_COUNT);
 
-  for (int i = 0; i < count; i++)
+  uniform(0);
+
+  if (pos == TWO_PIXEL_COUNT - 1)
   {
-    int val = floor(space * i) + (pnt / 2);
-    val = val % strip.numPixels();
-
-    // unset the last pixel
-    if (val > 0)
-      strip.setPixelColor(val - 1, 0, 0, 0, 0);
-    else
-      strip.setPixelColor(strip.numPixels() - 1, 0, 0, 0, 0);
-
-    // set this pixel
-    strip.setPixelColor(val, 255, 255, 255, 255);
-
-    // set the next pixel, maybe
-    if (pnt % 2 == 1)
-    {
-      val = (val + 1) % strip.numPixels();
-      strip.setPixelColor(val, 255, 255, 255, 255);
-    }
+    strip.setPixelColor(PIXEL_COUNT - 1, 100, 100, 100);
+    strip.setPixelColor(0,               100, 100, 100);
   }
-
-  // set the brightness
-  if (pnt % 2 == 1)
+  else if (pos % 2 == 0)
   {
-    strip.setBrightness(brightness * 0.5);
+    strip.setPixelColor(pos / 2, 150, 150, 150);
   }
-  else
+  else //if (pos < TWO_PIXEL_COUNT)
   {
-    strip.setBrightness(brightness);
+    strip.setPixelColor(pos / 2,     100, 100, 100);
+    strip.setPixelColor(pos / 2 + 1, 100, 100, 100);
   }
   
   strip.show();
+
+  return 40;
 }
 
 uint16_t snake()
 {
-  
+  uint16_t c;
+  uint8_t pos = clkDivide(idx, 3) % PIXEL_COUNT;
+  uint8_t i;
+  int8_t j;
+
+  c = 150;
+  for (i = 0; i < PIXEL_COUNT; i++)
+  {
+    j = pos - i;
+    if (j < 0) j += PIXEL_COUNT;
+    strip.setPixelColor(j, c, c, c);
+    if (c > 5)
+      c = c * 10 / 16;
+    else
+      c = 0;
+  }
+
+  strip.show();
+
+  return 40;
 }
 
 uint16_t rain()
 {
-  
+  sparkles(0x00000032, 0x00969696, 100, 4, 1);
+
+  strip.show();
+
+  return 40;
 }
 
 uint16_t fire()
 {
-  
+  sparkles(0x00320000, 0x00969600, 40, PIXEL_COUNT-3, 3);
+
+  strip.show();
+
+  return 20;
 }
 
-void sparkles(uint32_t baseColor, uint32_t sparkleColor, uint16_t numSparkles)
+/**
+ * A psuedo-random number generator that takes less space than the built in random().
+ * https://en.wikipedia.org/wiki/Xorshift
+ */
+uint32_t smallRand(uint32_t limit)
 {
-  double base = 5;
-  int rangeLow = 150;
-  int rangeHigh = 250;
+    /* Algorithm "xor" from p. 4 of Marsaglia, "Xorshift RNGs" */
+    rand_next ^= rand_next << 13;
+    rand_next ^= rand_next >> 17;
+    rand_next ^= rand_next << 5;
+//    Serial.println(rand_next);
+    return rand_next % limit;
+}
+
+void sparkles(uint32_t baseColor, uint32_t sparkleColorLow, uint32_t singleChannelRange, uint16_t numSparkles, uint8_t subVal)
+{
+  uint32_t rangeRnd;
+  uint8_t i, cnt, pixel;
+  uint8_t *pixPtr, *basePtr;
   
   // how many drops do we have?
-  int cnt = 0;
-  for (int i = 0; i < strip.numPixels(); i++)
+  for (pixel = 0; pixel < PIXEL_COUNT; pixel++)
   {
-    cnt += (rainDrops[i] > 0) ? 1 : 0;
+    cnt += (rainDrops[pixel] > 0) ? 1 : 0;
   }
-
-  // what is the darkest non-zero base color channel?
-  uint8_t darkestChannel = min(baseColor & 0x00FF0000, min(baseColor & 0x0000FF00, baseColor & 0x000000FF));
 
   // create new drops!
   while (cnt < numSparkles)
   {
-    int pixel = random(strip.numPixels());
+    pixel = smallRand(PIXEL_COUNT);
     if (rainDrops[pixel] == 0)
     {
-      rainDrops[pixel] = random(rangeLow, rangeHigh);
+      rangeRnd = smallRand(singleChannelRange);
+      rainDrops[pixel] = ( (sparkleColorLow & 0x00FF0000) + (rangeRnd << 16) |
+                           (sparkleColorLow & 0x0000FF00) + (rangeRnd <<  8) |
+                           (sparkleColorLow & 0x000000FF) +         rangeRnd );
       cnt++;
     }
   }
 
   // draw the drops
-  uniform(baseColor);
-  for (int i = 0; i < strip.numPixels(); i++)
+  for (pixel = 0; pixel < PIXEL_COUNT; pixel++)
   {
-    if (rainDrops[i] > 0)
+    if (rainDrops[pixel] > 0)
     {
-      rainDrops[i] -= 1;
-      if (rainDrops[i] > darkestChannel)
+      pixPtr = (void*)(rainDrops + pixel);
+      basePtr = (void*)&baseColor;
+      for (i = 0; i < 4; i++)
       {
-        strip.setPixelColor(i,
-          max(sparkleColor & 0x00FF0000, rainDrops[i]),
-          max(sparkleColor & 0x0000FF00, rainDrops[i]),
-          max(sparkleColor & 0x000000FF, rainDrops[i]));
+        if (pixPtr[i] > 0)
+        {
+          if (pixPtr[i] > subVal)
+            pixPtr[i] -= subVal;
+          else
+            pixPtr[i] = 0;
+        }
+        if (pixPtr[i] < basePtr[i])
+          pixPtr[i] = basePtr[i];
+      }
+      strip.setPixelColor(pixel, *((uint32_t*)pixPtr) );
+      if (rainDrops[pixel] == baseColor)
+      {
+        rainDrops[pixel] = 0;
       }
     }
+    else
+    {
+      strip.setPixelColor(pixel, baseColor);
+    }
   }
-
-  strip.show();
 }
 
 uint16_t flash(bool on)
