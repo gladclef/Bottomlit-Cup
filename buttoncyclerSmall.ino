@@ -75,7 +75,7 @@ uint16_t currTime, btnHighTime = 0;
 #ifdef ARDUINO_UNO
 uint8_t brightness = 150;
 #endif
-SHOW_TYPE showType = FIRE;
+SHOW_TYPE showType = RAIN;
 bool oldState = LOW;
 
 void setup() {
@@ -269,7 +269,7 @@ uint16_t snake()
 
 uint16_t rain()
 {
-  sparkles(0x00000032, 0x00969696, 100, 4, 1);
+  sparkles(0x00000032, 0x00969696, 100, 4, 2);
 
   strip.show();
 
@@ -278,7 +278,14 @@ uint16_t rain()
 
 uint16_t fire()
 {
-  sparkles(0x00320000, 0x00969600, 40, PIXEL_COUNT-3, 3);
+  // create the base red color
+  uint32_t baseColor = (idx % 25) * 2;
+  if (baseColor > 25)
+    baseColor = 50-baseColor;
+  baseColor += 25;
+  baseColor = baseColor << 16;
+  
+  sparkles(baseColor, 0x00969600, 60, PIXEL_COUNT-6, 2);
 
   strip.show();
 
@@ -299,10 +306,10 @@ uint32_t smallRand(uint32_t limit)
     return rand_next % limit;
 }
 
-void sparkles(uint32_t baseColor, uint32_t sparkleColorLow, uint32_t singleChannelRange, uint16_t numSparkles, uint8_t subVal)
+void sparkles(uint32_t baseColor, uint32_t sparkleColorLow, uint32_t singleChannelRange, uint8_t numSparkles, uint8_t subVal)
 {
   uint32_t rangeRnd;
-  uint8_t i, cnt, pixel;
+  uint8_t i, pixel, cnt = 0;
   uint8_t *pixPtr, *basePtr;
   
   // how many drops do we have?
@@ -330,8 +337,8 @@ void sparkles(uint32_t baseColor, uint32_t sparkleColorLow, uint32_t singleChann
   {
     if (rainDrops[pixel] > 0)
     {
-      pixPtr = (void*)(rainDrops + pixel);
-      basePtr = (void*)&baseColor;
+      pixPtr = (uint8_t*)(rainDrops + pixel);
+      basePtr = (uint8_t*)&baseColor;
       for (i = 0; i < 4; i++)
       {
         if (pixPtr[i] > 0)
