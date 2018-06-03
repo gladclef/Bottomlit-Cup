@@ -68,14 +68,14 @@ typedef enum {
 //   NEO_KHZ800  800 KHz bitstream (e.g. High Density LED strip), correct for neopixel stick
 Adafruit_NeoPixel strip = NULL;
 
-uint32_t rainDrops[PIXEL_COUNT];
+uint32_t sparkles[PIXEL_COUNT];
 uint32_t rand_next = 3179389096;
 uint16_t idx = 0;
 uint16_t currTime, btnHighTime = 0;
 #ifdef ARDUINO_UNO
 uint8_t brightness = 150;
 #endif
-SHOW_TYPE showType = BETTER_THEATER_CHASE;
+SHOW_TYPE showType = RAINBOW_CYCLE;
 bool oldState = LOW;
 
 void setup() {
@@ -103,6 +103,7 @@ void setup() {
 
 void loop() {
   bool newState;
+  uint8_t i;
     
   // Get current button state.
   newState = digitalRead(BUTTON_PIN);
@@ -140,6 +141,8 @@ void loop() {
         if (showType >= NONE)
           showType=0;
         uniform(0);
+        for (i = 0; i < PIXEL_COUNT; i++)
+          sparkles[i] = 0;
       }
     }
   }
@@ -263,6 +266,7 @@ uint16_t snake()
   {
     j = pos - i;
     if (j < 0) j += PIXEL_COUNT;
+    j = PIXEL_COUNT - j - 1;
     strip.setPixelColor(j, c, c, c);
     if (c > 5)
       c = c * 10 / 16;
@@ -277,7 +281,7 @@ uint16_t snake()
 
 uint16_t rain()
 {
-  sparkles(0x00000032, 0x00969696, 100, 4, 2);
+  sparkle(0x00000032, 0x00969696, 100, 4, 2);
 
   strip.show();
 
@@ -293,7 +297,7 @@ uint16_t fire()
   baseColor += 25;
   baseColor = baseColor << 16;
   
-  sparkles(baseColor, 0x00969600, 60, PIXEL_COUNT-6, 2);
+  sparkle(baseColor, 0x00969600, 60, PIXEL_COUNT-6, 2);
 
   strip.show();
 
@@ -314,38 +318,38 @@ uint32_t smallRand(uint32_t limit)
     return rand_next % limit;
 }
 
-void sparkles(uint32_t baseColor, uint32_t sparkleColorLow, uint32_t singleChannelRange, uint8_t numSparkles, uint8_t subVal)
+void sparkle(uint32_t baseColor, uint32_t sparkleColorLow, uint32_t singleChannelRange, uint8_t numSparkles, uint8_t subVal)
 {
   uint32_t rangeRnd;
   uint8_t i, pixel, cnt = 0;
   uint8_t *pixPtr, *basePtr;
   
-  // how many drops do we have?
+  // how many sparkles do we have?
   for (pixel = 0; pixel < PIXEL_COUNT; pixel++)
   {
-    cnt += (rainDrops[pixel] > 0) ? 1 : 0;
+    cnt += (sparkles[pixel] > 0) ? 1 : 0;
   }
 
-  // create new drops!
+  // create new sparkles!
   while (cnt < numSparkles)
   {
     pixel = smallRand(PIXEL_COUNT);
-    if (rainDrops[pixel] == 0)
+    if (sparkles[pixel] == 0)
     {
       rangeRnd = smallRand(singleChannelRange);
-      rainDrops[pixel] = ( (sparkleColorLow & 0x00FF0000) + (rangeRnd << 16) |
-                           (sparkleColorLow & 0x0000FF00) + (rangeRnd <<  8) |
-                           (sparkleColorLow & 0x000000FF) +         rangeRnd );
+      sparkles[pixel] = ( (sparkleColorLow & 0x00FF0000) + (rangeRnd << 16) |
+                          (sparkleColorLow & 0x0000FF00) + (rangeRnd <<  8) |
+                          (sparkleColorLow & 0x000000FF) +         rangeRnd );
       cnt++;
     }
   }
 
-  // draw the drops
+  // draw the sparkles
   for (pixel = 0; pixel < PIXEL_COUNT; pixel++)
   {
-    if (rainDrops[pixel] > 0)
+    if (sparkles[pixel] > 0)
     {
-      pixPtr = (uint8_t*)(rainDrops + pixel);
+      pixPtr = (uint8_t*)(sparkles + pixel);
       basePtr = (uint8_t*)&baseColor;
       for (i = 0; i < 4; i++)
       {
@@ -360,9 +364,9 @@ void sparkles(uint32_t baseColor, uint32_t sparkleColorLow, uint32_t singleChann
           pixPtr[i] = basePtr[i];
       }
       strip.setPixelColor(pixel, *((uint32_t*)pixPtr) );
-      if (rainDrops[pixel] == baseColor)
+      if (sparkles[pixel] == baseColor)
       {
-        rainDrops[pixel] = 0;
+        sparkles[pixel] = 0;
       }
     }
     else
