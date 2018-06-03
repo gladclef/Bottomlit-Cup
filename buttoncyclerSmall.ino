@@ -75,7 +75,7 @@ uint16_t currTime, btnHighTime = 0;
 #ifdef ARDUINO_UNO
 uint8_t brightness = 150;
 #endif
-SHOW_TYPE showType = RAIN;
+SHOW_TYPE showType = BETTER_THEATER_CHASE;
 bool oldState = LOW;
 
 void setup() {
@@ -219,23 +219,31 @@ uint16_t rainbowCycle()
 
 uint16_t betterTheaterChase()
 {
-  uint8_t pos = clkDivide(idx, 3) % (TWO_PIXEL_COUNT);
+  uint8_t i, pos = clkDivide(idx, 3) % (TWO_PIXEL_COUNT);
 
   uniform(0);
 
-  if (pos == TWO_PIXEL_COUNT - 1)
+  for (i = 0; i < 3; i++)
   {
-    strip.setPixelColor(PIXEL_COUNT - 1, 100, 100, 100);
-    strip.setPixelColor(0,               100, 100, 100);
-  }
-  else if (pos % 2 == 0)
-  {
-    strip.setPixelColor(pos / 2, 150, 150, 150);
-  }
-  else //if (pos < TWO_PIXEL_COUNT)
-  {
-    strip.setPixelColor(pos / 2,     100, 100, 100);
-    strip.setPixelColor(pos / 2 + 1, 100, 100, 100);
+    // draw current position
+    if (pos == TWO_PIXEL_COUNT - 1)
+    {
+      strip.setPixelColor(PIXEL_COUNT - 1, 100, 100, 100);
+      strip.setPixelColor(0,               100, 100, 100);
+    }
+    else if (pos % 2 == 0)
+    {
+      strip.setPixelColor(PIXEL_COUNT - (pos / 2) - 1, 150, 150, 150);
+    }
+    else //if (pos < TWO_PIXEL_COUNT)
+    {
+      strip.setPixelColor(PIXEL_COUNT - (pos / 2) - 1,     100, 100, 100);
+      strip.setPixelColor(PIXEL_COUNT - (pos / 2 + 1) - 1, 100, 100, 100);
+    }
+
+    // prepare for next position
+    pos += (TWO_PIXEL_COUNT * 4) / (4 * 3);
+    pos %= TWO_PIXEL_COUNT;
   }
   
   strip.show();
