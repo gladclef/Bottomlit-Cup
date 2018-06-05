@@ -6,13 +6,13 @@
 #include <Adafruit_NeoPixel.h>
 #include <avr/sleep.h>
 
-#define ARDUINO_UNO 1
-//#define GEMMA 1
+//#define ARDUINO_UNO 1
+#define GEMMA 1
 
 // Digital IO pin connected to the button.  This will be
 // held low with an external with a pull-down resistor
 // so the switch should pull the pin high momentarily.
-// On a low -> high transition, the button press logic 
+// On a low -> high transition, the button press logic
 // will execute.
 #ifdef ARDUINO_UNO
 #define BUTTON_PIN   2
@@ -70,6 +70,7 @@ Adafruit_NeoPixel strip = NULL;
 
 uint32_t sparkles[PIXEL_COUNT];
 uint32_t rand_next = 3179389096;
+uint32_t changeTimer = millis();
 uint16_t idx = 0;
 uint16_t currTime, btnHighTime = 0;
 #ifdef ARDUINO_UNO
@@ -88,6 +89,7 @@ void setup() {
 #ifdef POWER_EN_PIN
   pinMode(POWER_EN_PIN, OUTPUT);
   digitalWrite(POWER_EN_PIN, HIGH);
+  delay(10); // wait for the capacitor to saturate before doing anything else
 #endif
 
   pinMode(BUTTON_PIN, INPUT);
@@ -102,9 +104,9 @@ void setup() {
 }
 
 void loop() {
+  uint8_t prevShowType;
   bool newState;
-  uint8_t i;
-    
+
   // Get current button state.
   newState = digitalRead(BUTTON_PIN);
 #ifdef BTN_LED_PIN
@@ -124,6 +126,7 @@ void loop() {
     {
       btnHighTime = currTime;
     }
+    changeTimer = millis(); // reset auto-change countdown whenever a button press is detected
   }
   else // newState = LOW
   {
@@ -139,10 +142,8 @@ void loop() {
         // update the display
         showType = (int)showType + 1;
         if (showType >= NONE)
-          showType=0;
-        uniform(0);
-        for (i = 0; i < PIXEL_COUNT; i++)
-          sparkles[i] = 0;
+          showType = 0;
+        showTypeChanged();
       }
     }
   }
@@ -150,7 +151,19 @@ void loop() {
   // Set the last button state to the old state.
   oldState = newState;
 
-  // set the brightneww
+  // auto-cycle through show types once/hour
+  if (changeTimer > millis()) // deal with clock rollover
+    changeTimer = millis();
+  else if (millis() - changeTimer > 3600000) // = 60 * 60 * 1000
+  {
+    prevShowType = showType;
+    while (showType == prevShowType)
+      showType = smallRand(NONE);
+    showTypeChanged();
+    changeTimer = millis();
+  }
+
+  // set the brightness
 #ifdef ARDUINO_UNO
   strip.setBrightness(brightness);
 #endif
@@ -160,43 +173,57 @@ void loop() {
   idx++;
 }
 
+void showTypeChanged()
+{
+  uint8_t i;
+
+  uniform(0);
+  memset(sparkles, 0, PIXEL_COUNT * 4);
+}
+
 void runShow()
 {
-  switch(showType){
+  uint16_t delayMills = 0;
+  strip.setBrightness(255);
+
+  switch (showType) {
     case RAINBOW_CYCLE:
-      delay(rainbowCycle());
+      delayMills = rainbowCycle();
       break;
     case BETTER_THEATER_CHASE:
-      delay(betterTheaterChase());
+      delayMills = betterTheaterChase();
       break;
     case SNAKE:
-      delay(snake());
+      delayMills = snake();
       break;
     case RAIN:
-      delay(rain());
+      delayMills = rain();
       break;
     case FIRE:
-      delay(fire());
+      delayMills = fire();
       break;
     case NONE:
-      delay(uniform(0));
+      delayMills = uniform(0);
       break;
     case FLASH:
       flash(idx % 2);
-      delay(200);
+      delayMills = 250;
       break;
   }
+
+  strip.show();
+  delay(delayMills);
 }
 
 uint16_t uniform(uint32_t c)
 {
-  uint16_t i;
+  uint8_t i;
 
   for (i = 0; i < PIXEL_COUNT; i++)
   {
     strip.setPixelColor(i, c);
   }
-  
+
   return 100;
 }
 
@@ -204,31 +231,31 @@ uint16_t rainbowCycle()
 {
   uint32_t c;
   uint16_t i, j, k, interval;
-  
+
   j = clkDivide(idx, 20) % PIXEL_COUNT; // essentially pixel position
   k = clkDivide(idx, 2) % 10;
 
   interval = 256 / PIXEL_COUNT;
-  for(i=0; i < strip.numPixels(); i++) {
+  for (i = 0; i < strip.numPixels(); i++) {
     c = Wheel((i + j) * interval + (k * interval / 10));
     strip.setPixelColor(i, c);
   }
   strip.setBrightness(120);
-  strip.show();
-  strip.setBrightness(255);
 
   return 60;
 }
 
 uint16_t betterTheaterChase()
 {
-  uint8_t i, pos = clkDivide(idx, 3) % (TWO_PIXEL_COUNT);
+  uint8_t pos = clkDivide(idx, 3) % (TWO_PIXEL_COUNT);
+  uint8_t i, revPos;
 
   uniform(0);
 
   for (i = 0; i < 3; i++)
   {
     // draw current position
+    revPos = PIXEL_COUNT - (pos / 2) - 1;
     if (pos == TWO_PIXEL_COUNT - 1)
     {
       strip.setPixelColor(PIXEL_COUNT - 1, 100, 100, 100);
@@ -236,20 +263,18 @@ uint16_t betterTheaterChase()
     }
     else if (pos % 2 == 0)
     {
-      strip.setPixelColor(PIXEL_COUNT - (pos / 2) - 1, 150, 150, 150);
+      strip.setPixelColor(revPos, 150, 150, 150);
     }
     else //if (pos < TWO_PIXEL_COUNT)
     {
-      strip.setPixelColor(PIXEL_COUNT - (pos / 2) - 1,     100, 100, 100);
-      strip.setPixelColor(PIXEL_COUNT - (pos / 2 + 1) - 1, 100, 100, 100);
+      strip.setPixelColor(revPos,     100, 100, 100);
+      strip.setPixelColor(revPos - 1, 100, 100, 100);
     }
 
     // prepare for next position
     pos += (TWO_PIXEL_COUNT * 4) / (4 * 3);
     pos %= TWO_PIXEL_COUNT;
   }
-  
-  strip.show();
 
   return 40;
 }
@@ -274,16 +299,12 @@ uint16_t snake()
       c = 0;
   }
 
-  strip.show();
-
   return 40;
 }
 
 uint16_t rain()
 {
   sparkle(0x00000032, 0x00969696, 100, 4, 2);
-
-  strip.show();
 
   return 40;
 }
@@ -293,29 +314,27 @@ uint16_t fire()
   // create the base red color
   uint32_t baseColor = (idx % 25) * 2;
   if (baseColor > 25)
-    baseColor = 50-baseColor;
+    baseColor = 50 - baseColor;
   baseColor += 25;
   baseColor = baseColor << 16;
-  
-  sparkle(baseColor, 0x00969600, 60, PIXEL_COUNT-6, 2);
 
-  strip.show();
+  sparkle(baseColor, 0x00969600, 60, PIXEL_COUNT - 6, 2);
 
   return 20;
 }
 
 /**
- * A psuedo-random number generator that takes less space than the built in random().
- * https://en.wikipedia.org/wiki/Xorshift
- */
+   A psuedo-random number generator that takes less space than the built in random().
+   https://en.wikipedia.org/wiki/Xorshift
+*/
 uint32_t smallRand(uint32_t limit)
 {
-    /* Algorithm "xor" from p. 4 of Marsaglia, "Xorshift RNGs" */
-    rand_next ^= rand_next << 13;
-    rand_next ^= rand_next >> 17;
-    rand_next ^= rand_next << 5;
-//    Serial.println(rand_next);
-    return rand_next % limit;
+  /* Algorithm "xor" from p. 4 of Marsaglia, "Xorshift RNGs" */
+  rand_next ^= rand_next << 13;
+  rand_next ^= rand_next >> 17;
+  rand_next ^= rand_next << 5;
+  //    Serial.println(rand_next);
+  return rand_next % limit;
 }
 
 void sparkle(uint32_t baseColor, uint32_t sparkleColorLow, uint32_t singleChannelRange, uint8_t numSparkles, uint8_t subVal)
@@ -323,7 +342,7 @@ void sparkle(uint32_t baseColor, uint32_t sparkleColorLow, uint32_t singleChanne
   uint32_t rangeRnd;
   uint8_t i, pixel, cnt = 0;
   uint8_t *pixPtr, *basePtr;
-  
+
   // how many sparkles do we have?
   for (pixel = 0; pixel < PIXEL_COUNT; pixel++)
   {
@@ -378,17 +397,18 @@ void sparkle(uint32_t baseColor, uint32_t sparkleColorLow, uint32_t singleChanne
 
 uint16_t flash(bool on)
 {
-  uniform(on ? 0x00AFAFAF : 0x00000000);
+  uniform(on ? 0x80808080 : 0);
+  strip.show();
 }
 
 // Input a value 0 to 255 to get a color value.
 // The colours are a transition r - g - b - back to r.
 uint32_t Wheel(uint8_t WheelPos) {
   WheelPos = 255 - WheelPos;
-  if(WheelPos < 85) {
+  if (WheelPos < 85) {
     return strip.Color(255 - WheelPos * 3, 0, WheelPos * 3);
   }
-  if(WheelPos < 170) {
+  if (WheelPos < 170) {
     WheelPos -= 85;
     return strip.Color(0, WheelPos * 3, 255 - WheelPos * 3);
   }
@@ -397,40 +417,40 @@ uint32_t Wheel(uint8_t WheelPos) {
 }
 
 /**
- * Divides the given in by divVal.
- * Examples:
- * 1) in     = 0
- *    divVal = 10
- *    ret    = 0
- * 2) in     = 45
- *    divVal = 10
- *    ret    = 4
- * 3) in     = 45
- *    divVal = 1
- *    ret    = 45
- */
+   Divides the given in by divVal.
+   Examples:
+   1) in     = 0
+      divVal = 10
+      ret    = 0
+   2) in     = 45
+      divVal = 10
+      ret    = 4
+   3) in     = 45
+      divVal = 1
+      ret    = 45
+*/
 uint16_t clkDivide(uint16_t in, uint16_t divVal)
 {
   return (in - (in % divVal)) / divVal;
 }
 
 /**
- * Turns off the ADC and puts the processor in an extremely low power mode.
- * Holding the button down for 3 seconds will turn the processor back on, but it won't do anything until the button is released.
- * Once the processor is awake it will also re-enable everything it had turned off.
- */
+   Turns off the ADC and puts the processor in an extremely low power mode.
+   Holding the button down for 3 seconds will turn the processor back on, but it won't do anything until the button is released.
+   Once the processor is awake it will also re-enable everything it had turned off.
+*/
 void doSleep()
 {
   uint8_t adcsra_prev, i;
   bool flashVal, wakeReady;
-  
+
   wakeReady = false;
   flashVal = true;
 
   // let the user know we are going to sleep
 #ifdef ARDUINO_UNO
   Serial.println("Going to sleep now!");
-    delay(50);
+  delay(50);
 #endif
   for (i = 0; i < 3; i++);
   {
@@ -451,11 +471,11 @@ void doSleep()
 #ifdef BTN_LED_PIN
   digitalWrite(BTN_LED_PIN, LOW);
 #endif
-  
+
   // disable ADC
 #ifdef ARDUINO_UNO
   Serial.println("...disabling ADC");
-    delay(50);
+  delay(50);
 #endif
   adcsra_prev = ADCSRA;
 #ifdef ARDUINO_UNO
@@ -463,23 +483,23 @@ void doSleep()
 #elif GEMMA
   ADCSRA &= ~_BV(ADEN);
 #endif
-  
+
   // prepare shut down
 #ifdef ARDUINO_UNO
   Serial.println("...preparing to shut down");
-    delay(50);
+  delay(50);
 #endif
   enableSleep();
-  
+
   // shut down
 #ifdef ARDUINO_UNO
   Serial.println("...shutting down");
-    delay(50);
+  delay(50);
 #endif
   safeSleep();
 #ifdef ARDUINO_UNO
   Serial.println("...temp wake up");
-    delay(50);
+  delay(50);
 #endif
 
   /////////////////////////////////////////////////////////////////
@@ -515,12 +535,12 @@ void doSleep()
       {
         // Held down for 3 seconds, time to wake up!
         wakeReady = true;
-        
+
         // Let the user know we are awake and wait for button to be released.
         wakeReady = true;
         flash(flashVal);
         flashVal = !flashVal;
-        delay(150);
+        delay(250);
       }
     }
     delay(50); // debounce time
@@ -528,7 +548,7 @@ void doSleep()
     {
       break;
     }
-    
+
     // not held long enough, go to sleep
 #ifdef BTN_LED_PIN
     digitalWrite(BTN_LED_PIN, LOW);
@@ -541,10 +561,10 @@ void doSleep()
   ////////////////////////////////////////
   ////////// Now we are awake. ///////////
   ////////////////////////////////////////
-  
+
   // disable sleep
   sleep_disable();
-  
+
   // enable ADC
   ADCSRA = adcsra_prev;
 
@@ -552,13 +572,14 @@ void doSleep()
   btnHighTime = 0;
 #ifdef ARDUINO_UNO
   Serial.println("Time to wake up!");
-    delay(50);
+  delay(50);
 #endif
+  changeTimer = millis();
 }
 
 /**
- * Enables sleep and registers the interrupt button as an external wake interrupt.
- */
+   Enables sleep and registers the interrupt button as an external wake interrupt.
+*/
 void enableSleep()
 {
   // enable interrupt pin INT0 (arduino uno digital pin 2)
@@ -570,9 +591,9 @@ void enableSleep()
   PCMSK = _BV(PCINT1);             // Set change mask for pin 1
   GIMSK = _BV(PCIE);               // Enable pin change interrupt
 #endif
-  
+
   cli();                        // Disable interrupts
-  
+
   set_sleep_mode(SLEEP_MODE_PWR_DOWN);
   sleep_enable();
 
@@ -580,8 +601,8 @@ void enableSleep()
 }
 
 /**
- * Disables sleep and unregisters the interrupt button as an external wake interrupt.
- */
+   Disables sleep and unregisters the interrupt button as an external wake interrupt.
+*/
 void disableSleep()
 {
   // disable interrupt pin INT0 (arduino uno digital pin 2)
@@ -596,14 +617,14 @@ void disableSleep()
 
   cli();                        // Disable interrupts
   sleep_disable();              // Clear SE bit
-  
+
   sei();                        // Enable interrupts
 }
 
 /**
- * Turns off the neopixels, turns off the power pin, and then sleeps.
- * After sleep, turns the power pin back on.
- */
+   Turns off the neopixels, turns off the power pin, and then sleeps.
+   After sleep, turns the power pin back on.
+*/
 void safeSleep()
 {
   uniform(0);                       // turn off the neopixels
@@ -616,6 +637,7 @@ void safeSleep()
   sleep_cpu();                      // go to sleep
 #ifdef POWER_EN_PIN
   digitalWrite(POWER_EN_PIN, HIGH); // turn on power to the neopixels
+  delay(10); // wait for the capacitor to saturate before doing anything else
 #endif
 }
 
