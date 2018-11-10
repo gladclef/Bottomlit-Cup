@@ -304,9 +304,10 @@ uint16_t snake()
 
 uint16_t rain()
 {
-  sparkle(0x00000032, 0x00969696, 100, 4, 2);
+	// sparkle(baseColor, sparkleColorLow, singleChannelRange, numSparkles, subVal)
+  sparkle(0x0000001E, 0x00505050, 80, 4, 2);
 
-  return 40;
+  return 60;
 }
 
 uint16_t fire()
@@ -318,6 +319,7 @@ uint16_t fire()
   baseColor += 25;
   baseColor = baseColor << 16;
 
+	// sparkle(baseColor, sparkleColorLow, singleChannelRange, numSparkles, subVal)
   sparkle(baseColor, 0x00969600, 60, PIXEL_COUNT - 6, 2);
 
   return 20;
@@ -337,6 +339,13 @@ uint32_t smallRand(uint32_t limit)
   return rand_next % limit;
 }
 
+/** Creates a faded sparkling animation.
+ * @param baseColor The color for non-sparkles.
+ * @param sparkleColorLow The brightest possible sparkle color.
+ * @param singleChannelRange The smallest span in the R, G, or B channel between baseColor and sparkleColorLow.
+ * @param numSparkles The number of pixels to have sparkle at a time.
+ * @param subVal The value to subtract from current sparkle pixels.
+ */
 void sparkle(uint32_t baseColor, uint32_t sparkleColorLow, uint32_t singleChannelRange, uint8_t numSparkles, uint8_t subVal)
 {
   uint32_t rangeRnd;
